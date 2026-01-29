@@ -1,0 +1,7 @@
+Flask
+websocket-client
+Flask-SocketIO
+python-socketio
+python-engineio
+requests
+python-dotenv

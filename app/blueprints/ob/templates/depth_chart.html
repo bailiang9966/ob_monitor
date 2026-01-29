@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>币安订单簿</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+    <style>
+        .order-book {
+            font-family: Arial, sans-serif;
+        }
+        .order-book-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .order-book-table th,
+        .order-book-table td {
+            padding: 6px 8px;
+            text-align: right;
+            font-size: 14px;
+        }
+        .order-book-table th {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .order-book-table tr:hover {
+            background-color: #f8f9fa;
+        }
+        .bid-row {
+            background-color: rgba(46, 204, 113, 0.05);
+        }
+        .ask-row {
+            background-color: rgba(231, 76, 60, 0.05);
+        }
+        .current-price {
+            background-color: #ffd700;
+            font-weight: bold;
+            text-align: center !important;
+            font-size: 18px;
+            color: #000;
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+        }
+        .price-change {
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        .price-up {
+            color: #2ecc71;
+        }
+        .price-down {
+            color: #e74c3c;
+        }
+        .order-book-container {
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .order-book-header {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .order-book-content {
+            padding: 0;
+        }
+        .market-info {
+            margin-bottom: 20px;
+        }
+        .market-info h2 {
+            margin-bottom: 5px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .control-group label {
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+        .order-book-footer {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-top: 1px solid #dee2e6;
+        }
+        .alert-container {
+            min-height: 60px;
+        }
+        .volume-alert {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        .volume-alert.ask {
+            background-color: rgba(231, 76, 60, 0.1);
+            border-left: 4px solid #e74c3c;
+        }
+        .volume-alert.bid {
+            background-color: rgba(46, 204, 113, 0.1);
+            border-left: 4px solid #2ecc71;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+
+        
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h3>BTC</h3>
+                <div class="controls">
+                    <div id="btc-spread" class="mt-2">
+                        <span class="text-muted">价差: </span>
+                        <span id="btc-spread-value">0.00</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h3>ETH</h3>
+                <div class="controls">
+                    <div id="eth-spread" class="mt-2">
+                        <span class="text-muted">价差: </span>
+                        <span id="eth-spread-value">0.00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 第一档：BTC(10) + ETH(1) -->
+        <div class="mb-6">
+            <h3>第一档</h3>
+            <div class="row">
+                <!-- BTC 10 现货 -->
+                <div class="col-md-3 mb-4">
+                    <div class="order-book-container">
+                        <div class="order-book-header">
+                            <h5>BTC 10 现货</h5>
+                        </div>
+                        <div class="order-book-content">
+                            <table class="order-book-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">价格 </th>
+                                        <th style="width: 50%;">数量</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="btc-spot-10-body">
+                                    <!-- 订单数据将通过JavaScript动态添加 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <!-- BTC 10 合约 -->
+                <div class="col-md-3 mb-4">
+                    <div class="order-book-container">
+                        <div class="order-book-header">
+                            <h5>BTC 10 合约</h5>
+                        </div>
+                        <div class="order-book-content">
+                            <table class="order-book-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">价格 </th>
+                                        <th style="width: 50%;">数量</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="btc-futures-10-body">
+                                    <!-- 订单数据将通过JavaScript动态添加 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <!-- ETH 1 现货 -->
+                <div class="col-md-3 mb-4">
+                    <div class="order-book-container">
+                        <div class="order-book-header">
+                            <h5>ETH 1 现货</h5>
+                        </div>
+                        <div class="order-book-content">
+                            <table class="order-book-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">价格 </th>
+                                        <th style="width: 50%;">数量</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="eth-spot-1-body">
+                                    <!-- 订单数据将通过JavaScript动态添加 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <!-- ETH 1 合约 -->
+                <div class="col-md-3 mb-4">
+                    <div class="order-book-container">
+                        <div class="order-book-header">
+                            <h5>ETH 1 合约</h5>
+                        </div>
+                        <div class="order-book-content">
+                            <table class="order-book-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">价格 </th>
+                                        <th style="width: 50%;">数量</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="eth-futures-1-body">
+                                    <!-- 订单数据将通过JavaScript动态添加 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 第二档：BTC(20) + ETH(5) -->
+        <div class="mb-6">
+            <h3>第二档</h3>
+            <div class="row">
+                <!-- BTC 20 现货 -->
+                <div class="col-md-3 mb-4">
+                    <div class="order-book-container">
+                        <div class="order-book-header">
+                            <h5>BTC 20 现货</h5>
+                        </div>
+                        <div class="order-book-content">
+                            <table class="order-book-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">价格 </th>
+                                        <th style="width: 50%;">数量</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="btc-spot-20-body">
+                                    <!-- 订单数据将通过JavaScript动态添加 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <!-- BTC 20 合约 -->
+                <div class="col-md-3 mb-4">
+                    <div class="order-book-container">
+                        <div class="order-book-header">
+                            <h5>BTC 20 合约</h5>
+                        </div>
+                        <div class="order-book-content">
+                            <table class="order-book-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">价格 </th>
+                                        <th style="width: 50%;">数量</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="btc-futures-20-body">
+                                    <!-- 订单数据将通过JavaScript动态添加 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <!-- ETH 5 现货 -->
+                <div class="col-md-3 mb-4">
+                    <div class="order-book-container">
+                        <div class="order-book-header">
+                            <h5>ETH 5 现货</h5>
+                        </div>
+                        <div class="order-book-content">
+                            <table class="order-book-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">价格 </th>
+                                        <th style="width: 50%;">数量</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="eth-spot-5-body">
+                                    <!-- 订单数据将通过JavaScript动态添加 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <!-- ETH 5 合约 -->
+                <div class="col-md-3 mb-4">
+                    <div class="order-book-container">
+                        <div class="order-book-header">
+                            <h5>ETH 5 合约</h5>
+                        </div>
+                        <div class="order-book-content">
+                            <table class="order-book-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">价格 </th>
+                                        <th style="width: 50%;">数量</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="eth-futures-5-body">
+                                    <!-- 订单数据将通过JavaScript动态添加 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 第三档：BTC(50) + ETH(10) -->
+        <div class="mb-6">
+            <h3>第三档</h3>
+            <div class="row">
+                <!-- BTC 50 现货 -->
+                <div class="col-md-3 mb-4">
+                    <div class="order-book-container">
+                        <div class="order-book-header">
+                            <h5>BTC 50 现货</h5>
+                        </div>
+                        <div class="order-book-content">
+                            <table class="order-book-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">价格 </th>
+                                        <th style="width: 50%;">数量</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="btc-spot-50-body">
+                                    <!-- 订单数据将通过JavaScript动态添加 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <!-- BTC 50 合约 -->
+                <div class="col-md-3 mb-4">
+                    <div class="order-book-container">
+                        <div class="order-book-header">
+                            <h5>BTC 50 合约</h5>
+                        </div>
+                        <div class="order-book-content">
+                            <table class="order-book-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">价格 </th>
+                                        <th style="width: 50%;">数量</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="btc-futures-50-body">
+                                    <!-- 订单数据将通过JavaScript动态添加 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <!-- ETH 10 现货 -->
+                <div class="col-md-3 mb-4">
+                    <div class="order-book-container">
+                        <div class="order-book-header">
+                            <h5>ETH 10 现货</h5>
+                        </div>
+                        <div class="order-book-content">
+                            <table class="order-book-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">价格 </th>
+                                        <th style="width: 50%;">数量</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="eth-spot-10-body">
+                                    <!-- 订单数据将通过JavaScript动态添加 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <!-- ETH 10 合约 -->
+                <div class="col-md-3 mb-4">
+                    <div class="order-book-container">
+                        <div class="order-book-header">
+                            <h5>ETH 10 合约</h5>
+                        </div>
+                        <div class="order-book-content">
+                            <table class="order-book-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">价格 </th>
+                                        <th style="width: 50%;">数量</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="eth-futures-10-body">
+                                    <!-- 订单数据将通过JavaScript动态添加 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 提醒消息区域 -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="alert-container" id="alert-container">
+                    <!-- 提醒消息将通过JavaScript动态添加 -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 全局变量
+        let updateInterval;
+        let CONFIG = {};
+        
+        // 从后端获取配置数据
+        function fetchConfig() {
+            fetch('/api/config')
+                .then(response => response.json())
+                .then(data => {
+                    CONFIG = data;
+                    console.log('配置数据已获取:', CONFIG);
+                })
+                .catch(error => {
+                    console.error('获取配置数据失败:', error);
+                    // 使用默认配置作为备用
+                    CONFIG = {
+                        'BTCUSDT': {
+                            'futures': {10:100,20: 250, 50: 500},
+                            'spot': {10:15,20: 30, 50: 50}
+                        },
+                        'ETHUSDT': {
+                            'futures': {1: 5000, 5: 20000, 10: 50000},
+                            'spot': {1: 800, 5: 2000, 10: 5000}
+                        }
+                    };
+                });
+        }
+        
+        // 初始化时获取配置数据
+        fetchConfig();
+        
+        // 计算档位区间的挂单量
+        function calculatePriceLevels(bids, asks, currentPrice, priceStep, levelCount) {
+            // 计算上方卖单档位
+            const askLevels = [];
+            for (let i = 1; i <= levelCount; i++) {
+                const levelPrice = currentPrice + (i * priceStep);
+                let levelQuantity = 0;
+                
+                // 计算该档位内的挂单量
+                for (const ask of asks) {
+                    const price = ask[0];
+                    const quantity = ask[1];
+                    if (price >= levelPrice - priceStep && price < levelPrice) {
+                        levelQuantity += quantity;
+                    } else if (price >= levelPrice) {
+                        break;
+                    }
+                }
+                
+                askLevels.push({
+                    price: levelPrice,
+                    quantity: levelQuantity
+                });
+            }
+            
+            // 计算下方买单档位
+            const bidLevels = [];
+            for (let i = 1; i <= levelCount; i++) {
+                const levelPrice = currentPrice - (i * priceStep);
+                let levelQuantity = 0;
+                
+                // 计算该档位内的挂单量
+                for (const bid of bids) {
+                    const price = bid[0];
+                    const quantity = bid[1];
+                    if (price <= levelPrice + priceStep && price > levelPrice) {
+                        levelQuantity += quantity;
+                    } else if (price <= levelPrice) {
+                        break;
+                    }
+                }
+                
+                bidLevels.push({
+                    price: levelPrice,
+                    quantity: levelQuantity
+                });
+            }
+            
+            // 按价格从高到低排序买单档位
+            bidLevels.sort((a, b) => b.price - a.price);
+            
+            return { askLevels, bidLevels };
+        }
+        
+        // 更新单个订单簿表格
+        function updateSingleOrderBook(symbol, market, depthData, tableBodyId, priceStep) {
+            if (!depthData || !depthData[market]) {
+                return 0;
+            }
+            
+            const bids = depthData[market].bids;
+            const asks = depthData[market].asks;
+            // 使用从后端获取的最新价格
+            const currentPrice = depthData[market].last_price || 0;
+            
+            if (!bids || !asks || bids.length === 0 || asks.length === 0) {
+                return currentPrice;
+            }
+            
+            // 固定显示5个区间
+            const levelCount = 5;
+            // 计算档位数据
+            const { askLevels, bidLevels } = calculatePriceLevels(bids, asks, currentPrice, priceStep, levelCount);
+            
+            // 准备订单簿数据
+            const $orderBookBody = $(`#${tableBodyId}`);
+            $orderBookBody.empty();
+            
+            // 添加卖单数据（从高到低，最上面是最大的价格）
+            for (let i = askLevels.length - 1; i >= 0; i--) {
+                const ask = askLevels[i];
+                // 获取对应的阈值
+                const threshold = CONFIG[symbol + 'USDT']?.[market]?.[priceStep] || 1;
+                // 计算百分比
+                const percentage = Math.min(100, (ask.quantity / threshold) * 100);
+                // 计算背景颜色透明度（35%以下完全透明，阈值以上不透明，中间线性变化）
+                let opacity = 0;
+                if (percentage >= 35) {
+                    // 超过35%阈值后，透明度直线变化到100%
+                    opacity = (percentage - 35) / 65;
+                    opacity = Math.max(0, Math.min(1, opacity));
+                }
+                
+                const $row = $('<tr>').addClass('ask-row').css('background-color', `rgba(231, 76, 60, ${opacity})`);
+                $row.html(`
+                    <td>${Math.round(ask.price)}</td>
+                    <td>${ask.quantity.toFixed(2)}</td>
+                `);
+                $orderBookBody.append($row);
+            }
+            
+            // 添加当前价格行
+            const $priceRow = $('<tr>').addClass('current-price');
+            $priceRow.html(`
+                <td colspan="2" style="padding: 15px 0;">${currentPrice.toFixed(2)}</td>
+            `);
+            $orderBookBody.append($priceRow);
+            
+            // 添加买单数据（从高到低排列，最上面是最大的价格）
+            for (let i = 0; i < bidLevels.length; i++) {
+                const bid = bidLevels[i];
+                // 获取对应的阈值
+                const threshold = CONFIG[symbol + 'USDT']?.[market]?.[priceStep] || 1;
+                // 计算百分比
+                const percentage = Math.min(100, (bid.quantity / threshold) * 100);
+                // 计算背景颜色透明度（35%以下完全透明，阈值以上不透明，中间线性变化）
+                let opacity = 0;
+                if (percentage >= 35) {
+                    // 超过35%阈值后，透明度直线变化到100%
+                    opacity = (percentage - 35) / 65;
+                    opacity = Math.max(0, Math.min(1, opacity));
+                }
+                
+                const $row = $('<tr>').addClass('bid-row').css('background-color', `rgba(46, 204, 113, ${opacity})`);
+                $row.html(`
+                    <td>${Math.round(bid.price)}</td>
+                    <td>${bid.quantity.toFixed(2)}</td>
+                `);
+                $orderBookBody.append($row);
+            }
+            
+            return currentPrice;
+        }
+        
+        // 计算并显示价差
+        function calculateAndDisplaySpread(symbol, spotPrice, futuresPrice, spreadElementId) {
+            if (!spotPrice || !futuresPrice) {
+                return;
+            }
+            
+            const spread = spotPrice - futuresPrice;
+            const $spreadElement = $(`#${spreadElementId}`);
+            if ($spreadElement.length) {
+                $spreadElement.text(spread.toFixed(2));
+                // 根据价差正负设置颜色
+                if (spread > 0) {
+                    $spreadElement.removeClass('text-danger').addClass('text-success');
+                } else if (spread < 0) {
+                    $spreadElement.removeClass('text-success').addClass('text-danger');
+                } else {
+                    $spreadElement.removeClass('text-success text-danger');
+                }
+            }
+        }
+        
+        // 处理深度数据更新
+        function handleDepthUpdate(data) {
+            if (!data) {
+                return;
+            }
+            
+            // 更新BTC订单簿
+            // 现货
+            const btcSpotPrice10 = updateSingleOrderBook('BTC', 'spot', data.BTC, 'btc-spot-10-body', 10);
+            const btcSpotPrice20 = updateSingleOrderBook('BTC', 'spot', data.BTC, 'btc-spot-20-body', 20);
+            const btcSpotPrice50 = updateSingleOrderBook('BTC', 'spot', data.BTC, 'btc-spot-50-body', 50);
+            // 合约
+            const btcFuturesPrice10 = updateSingleOrderBook('BTC', 'futures', data.BTC, 'btc-futures-10-body', 10);
+            const btcFuturesPrice20 = updateSingleOrderBook('BTC', 'futures', data.BTC, 'btc-futures-20-body', 20);
+            const btcFuturesPrice50 = updateSingleOrderBook('BTC', 'futures', data.BTC, 'btc-futures-50-body', 50);
+            
+            // 更新ETH订单簿
+            // 现货
+            const ethSpotPrice1 = updateSingleOrderBook('ETH', 'spot', data.ETH, 'eth-spot-1-body', 1);
+            const ethSpotPrice5 = updateSingleOrderBook('ETH', 'spot', data.ETH, 'eth-spot-5-body', 5);
+            const ethSpotPrice10 = updateSingleOrderBook('ETH', 'spot', data.ETH, 'eth-spot-10-body', 10);
+            // 合约
+            const ethFuturesPrice1 = updateSingleOrderBook('ETH', 'futures', data.ETH, 'eth-futures-1-body', 1);
+            const ethFuturesPrice5 = updateSingleOrderBook('ETH', 'futures', data.ETH, 'eth-futures-5-body', 5);
+            const ethFuturesPrice10 = updateSingleOrderBook('ETH', 'futures', data.ETH, 'eth-futures-10-body', 10);
+            
+            // 计算并显示价差
+            calculateAndDisplaySpread('BTC', btcSpotPrice10, btcFuturesPrice10, 'btc-spread-value');
+            calculateAndDisplaySpread('ETH', ethSpotPrice10, ethFuturesPrice10, 'eth-spread-value');
+        }
+        
+        // 初始化SocketIO连接
+        const socket = io();
+        
+        // 监听深度数据更新
+        socket.on('depth_update', function(data) {
+            handleDepthUpdate(data);
+        });
+        
+        // 暂时关闭交易量提醒
+        /*socket.on('volume_alert', function(alert) {
+            // 创建提醒元素
+            const $alertElement = $('<div>').addClass(`volume-alert ${alert.type}`).text(alert.message);
+            
+            // 添加到提醒容器
+            const $alertContainer = $('#alert-container');
+            $alertContainer.append($alertElement);
+            
+            // 5秒后自动移除提醒
+            setTimeout(function() {
+                $alertElement.css('animation', 'fadeIn 0.3s ease-in-out reverse');
+                setTimeout(function() {
+                    $alertElement.remove();
+                }, 300);
+            }, 5000);
+        });*/
+        
+        // 初始化页面
+        $(document).ready(function() {
+            // 直接显示所有数据，不需要切换按钮
+        });
+    </script>
+</body>
+</html>
