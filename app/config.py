@@ -11,6 +11,6 @@ CONFIG = {
 
 # 币安WebSocket URL
 BINANCE_WS_URL = {
-    'spot': 'wss://stream.binance.com:9443/ws',
+    'spot': 'wss://stream.binance.com:443/ws',
     'futures': 'wss://fstream.binance.com/ws'
 }

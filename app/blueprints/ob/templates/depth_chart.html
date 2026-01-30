@@ -612,11 +612,91 @@
             }
         }
         
+        // 更新单个订单簿表格（使用后端计算的档位数据）
+        function updateSingleOrderBook(symbol, market, depthData, tableBodyId, priceStep) {
+            if (!depthData || !depthData[market]) {
+                return 0;
+            }
+            
+            const marketData = depthData[market];
+            const currentPrice = marketData.last_price || 0;
+            const levels = marketData.levels || {};
+            const stepData = levels[priceStep];
+            
+            if (!stepData) {
+                return currentPrice;
+            }
+            
+            const askLevels = stepData.ask_levels || [];
+            const bidLevels = stepData.bid_levels || [];
+            
+            // 准备订单簿数据
+            const $orderBookBody = $(`#${tableBodyId}`);
+            $orderBookBody.empty();
+            
+            // 添加卖单数据（从高到低，最上面是最大的价格）
+            for (let i = askLevels.length - 1; i >= 0; i--) {
+                const ask = askLevels[i];
+                // 获取对应的阈值
+                const threshold = CONFIG[symbol + 'USDT']?.[market]?.[priceStep] || 1;
+                // 计算百分比
+                const percentage = Math.min(100, (ask.quantity / threshold) * 100);
+                // 计算背景颜色透明度（35%以下完全透明，阈值以上不透明，中间线性变化）
+                let opacity = 0;
+                if (percentage >= 35) {
+                    // 超过35%阈值后，透明度直线变化到100%
+                    opacity = (percentage - 35) / 65;
+                    opacity = Math.max(0, Math.min(1, opacity));
+                }
+                
+                const $row = $('<tr>').addClass('ask-row').css('background-color', `rgba(231, 76, 60, ${opacity})`);
+                $row.html(`
+                    <td>${Math.round(ask.price)}</td>
+                    <td>${ask.quantity.toFixed(2)}</td>
+                `);
+                $orderBookBody.append($row);
+            }
+            
+            // 添加当前价格行
+            const $priceRow = $('<tr>').addClass('current-price');
+            $priceRow.html(`
+                <td colspan="2" style="padding: 15px 0;">${currentPrice.toFixed(2)}</td>
+            `);
+            $orderBookBody.append($priceRow);
+            
+            // 添加买单数据（从高到低排列，最上面是最大的价格）
+            for (let i = 0; i < bidLevels.length; i++) {
+                const bid = bidLevels[i];
+                // 获取对应的阈值
+                const threshold = CONFIG[symbol + 'USDT']?.[market]?.[priceStep] || 1;
+                // 计算百分比
+                const percentage = Math.min(100, (bid.quantity / threshold) * 100);
+                // 计算背景颜色透明度（35%以下完全透明，阈值以上不透明，中间线性变化）
+                let opacity = 0;
+                if (percentage >= 35) {
+                    // 超过35%阈值后，透明度直线变化到100%
+                    opacity = (percentage - 35) / 65;
+                    opacity = Math.max(0, Math.min(1, opacity));
+                }
+                
+                const $row = $('<tr>').addClass('bid-row').css('background-color', `rgba(46, 204, 113, ${opacity})`);
+                $row.html(`
+                    <td>${Math.round(bid.price)}</td>
+                    <td>${bid.quantity.toFixed(2)}</td>
+                `);
+                $orderBookBody.append($row);
+            }
+            
+            return currentPrice;
+        }
+        
         // 处理深度数据更新
         function handleDepthUpdate(data) {
             if (!data) {
                 return;
             }
+            
+            console.log('收到深度数据更新:', data);
             
             // 更新BTC订单簿
             // 现货
@@ -645,6 +725,21 @@
         
         // 初始化SocketIO连接
         const socket = io();
+        
+        // 连接事件
+        socket.on('connect', function() {
+            console.log('SocketIO连接成功');
+        });
+        
+        // 断开连接事件
+        socket.on('disconnect', function() {
+            console.log('SocketIO连接断开');
+        });
+        
+        // 错误事件
+        socket.on('error', function(error) {
+            console.error('SocketIO错误:', error);
+        });
         
         // 监听深度数据更新
         socket.on('depth_update', function(data) {
