@@ -403,7 +403,7 @@ class WebSocketService:
             steps = list(market_config.keys()) if market_config else []
             # 使用配置中的步长档位
             for step in steps:
-                levels[step] = self.calculate_price_levels(bids, asks, current_price, step, 5)
+                levels[step] = self.calculate_price_levels(bids, asks, current_price, step, 2)
             result[market] = {
                 'last_price': current_price,
                 'levels': levels

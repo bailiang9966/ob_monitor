@@ -1,7 +1,5 @@
 Flask
-websocket-client
 Flask-SocketIO
-python-socketio
-python-engineio
+aiohttp
 requests
 python-dotenv
